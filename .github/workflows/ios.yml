@@ -1,0 +1,43 @@
+# Builds the iOS app on a GitHub-hosted Mac (iOS apps can only be compiled
+# on macOS). Run it from the repository's Actions tab ("Run workflow"); the
+# finished DailyJuiceAuthors.ipa is attached to the run under "Artifacts".
+#
+# The .ipa is unsigned. Sideloadly or AltStore signs it with your Apple ID
+# when installing it on an iPhone. App Store / TestFlight releases need an
+# Apple Developer account and a signed build instead.
+name: iOS build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.3
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      - name: Build (unsigned)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package .ipa
+        run: |
+          mkdir Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qr DailyJuiceAuthors.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DailyJuiceAuthors-ios
+          path: DailyJuiceAuthors.ipa

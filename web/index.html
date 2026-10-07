@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Replaced by the `--base-href` argument of `flutter build web`. -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Write your Daily Juice and get the finished page, ready to share. For authors of The Daily Juice, Youth For Christ.">
+  <meta name="theme-color" content="#3D3D39">
+
+  <!-- iPhone: "Add to Home Screen" opens it full screen, like an app. -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="DJ Authors">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+  <link rel="icon" type="image/png" href="favicon.png">
+
+  <title>Daily Juice Authors</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #F3F2F0; }
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
+      font-family: -apple-system, system-ui, sans-serif;
+      color: #6B6A66; font-size: 14px;
+      transition: opacity .3s;
+    }
+    #loading img { width: 96px; height: 96px; border-radius: 22px; }
+    #loading .bar {
+      width: 120px; height: 3px; border-radius: 2px;
+      background: #DDDBD7; overflow: hidden;
+    }
+    #loading .bar::after {
+      content: ""; display: block; width: 40%; height: 100%;
+      background: #3D3D39; animation: slide 1.1s ease-in-out infinite;
+    }
+    @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <img src="icons/Icon-192.png" alt="">
+    <div class="bar"></div>
+    <div>Loading Daily Juice Authors…</div>
+  </div>
+  <script>
+    // Keep drafts from being cleared by the browser when space runs low.
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('loading');
+      el.style.opacity = '0';
+      setTimeout(function () { el.remove(); }, 300);
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
