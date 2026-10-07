@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/browser_text_box.dart';
 import '../../template/photo_crop.dart';
 import '../../template/template_layout.dart';
 import '../../template/template_painter.dart';
@@ -290,7 +291,11 @@ class _PageInputState extends State<PageInput> {
   @override
   void initState() {
     super.initState();
-    if (_appMenu && _open++ == 0) BrowserContextMenu.disableContextMenu();
+    if (_appMenu && _open++ == 0) {
+      BrowserContextMenu.disableContextMenu();
+      // Every touch goes to the app, so its menu shows every time.
+      browserTextBoxTouches(enabled: false);
+    }
     if (widget.capitals) {
       _shown = _CapitalsController()..value = widget.controller.value;
       _shown!.addListener(_toSource);
@@ -302,7 +307,10 @@ class _PageInputState extends State<PageInput> {
   void dispose() {
     widget.controller.removeListener(_fromSource);
     _shown?.dispose();
-    if (_appMenu && --_open == 0) BrowserContextMenu.enableContextMenu();
+    if (_appMenu && --_open == 0) {
+      BrowserContextMenu.enableContextMenu();
+      browserTextBoxTouches(enabled: true);
+    }
     super.dispose();
   }
 
