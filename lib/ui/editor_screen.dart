@@ -16,11 +16,13 @@ import '../core/word_count.dart';
 import '../models/daily_juice.dart';
 import '../template/photo_crop.dart';
 import '../template/template_layout.dart';
+import '../template/template_spec.dart';
 import 'result_screen.dart';
 import 'theme.dart';
 import 'widgets/focus_preview.dart';
 import 'widgets/form_parts.dart';
 import 'widgets/juice_preview.dart';
+import 'widgets/page_editor.dart';
 import 'widgets/grammar_sheet.dart';
 import 'widgets/shorten_sheet.dart';
 
@@ -77,6 +79,20 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// The Main Message grammar check is running.
   bool _grammarBusy = false;
+
+  /// Editing on the page in the LIVE PREVIEW, and the part being typed into
+  /// (null while the author chooses one).
+  bool _onPage = false;
+  PagePart? _pagePart;
+
+  // The page has its own fields (a focus node belongs to one field). They
+  // share the form's controllers, so both always show the same text and
+  // the same limits apply.
+  final _pageTitleFocus = FocusNode();
+  final _pageScriptureFocus = FocusNode();
+  final _pageReferenceFocus = FocusNode();
+  final _pageMessageFocus = FocusNode();
+  final Map<TextEditingController, FocusNode> _pageRefFocus = {};
 
   Timer? _saveTimer;
   bool _savedOnce = false;
@@ -143,7 +159,14 @@ class _EditorScreenState extends State<EditorScreen>
       f.addListener(_onFocusChange);
     }
     _tabs.addListener(() {
-      if (!_tabs.indexIsChanging) setState(() {});
+      if (_tabs.indexIsChanging) return;
+      setState(() {
+        // Back on WRITE, editing on the page ends.
+        if (_tabs.index == 0) {
+          _onPage = false;
+          _pagePart = null;
+        }
+      });
     });
 
     _liveIssues = _validate();
@@ -179,6 +202,11 @@ class _EditorScreenState extends State<EditorScreen>
       _referenceFocus,
       _messageFocus,
       ..._refFocus,
+      _pageTitleFocus,
+      _pageScriptureFocus,
+      _pageReferenceFocus,
+      _pageMessageFocus,
+      ..._pageRefFocus.values,
     ]) {
       f.dispose();
     }
@@ -363,7 +391,7 @@ class _EditorScreenState extends State<EditorScreen>
     _refFocus.add(focus);
   }
 
-  void _onAddReference() {
+  void _onAddReference({bool onPage = false}) {
     if (_refs.length >= Limits.furtherStudyRefs) {
       HapticFeedback.mediumImpact();
       setState(() => _notice['refs'] = Msg.furtherStudyMax);
@@ -372,7 +400,8 @@ class _EditorScreenState extends State<EditorScreen>
     setState(() => _addRefRow(''));
     _syncRefs();
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _refFocus.last.requestFocus(),
+      (_) => (onPage ? _pageRefFocusOf(_refs.last) : _refFocus.last)
+          .requestFocus(),
     );
   }
 
@@ -380,6 +409,11 @@ class _EditorScreenState extends State<EditorScreen>
     if (_refs.length == 1) {
       _refs.first.clear();
       return;
+    }
+    final pageFocus = _pageRefFocus.remove(_refs[i]);
+    if (pageFocus != null) {
+      // Its field stays on screen until the next frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) => pageFocus.dispose());
     }
     setState(() {
       _notice.remove('refs');
@@ -587,24 +621,478 @@ class _EditorScreenState extends State<EditorScreen>
     _tabs.animateTo(1);
   }
 
+  // -------------------------------------------------- edit on the page --
+
+  void _startPageEditing() => setState(() {
+    _onPage = true;
+    _pagePart = null;
+  });
+
+  void _stopPageEditing() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _onPage = false;
+      _pagePart = null;
+    });
+  }
+
+  void _onPageTap(PagePart part) {
+    switch (part) {
+      case PagePart.photo:
+      case PagePart.author:
+        final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              part == PagePart.photo
+                  ? 'Your photo comes from your profile. Change it there.'
+                  : 'Your name comes from your profile. Change it there.',
+            ),
+          ),
+        );
+      case PagePart.date:
+        _pickDate();
+      default:
+        _editOnPage(part);
+    }
+  }
+
+  void _editOnPage(PagePart part) {
+    setState(() => _pagePart = part);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _pagePart == part) _pageFocusOf(part).requestFocus();
+    });
+  }
+
+  FocusNode _pageRefFocusOf(TextEditingController c) =>
+      _pageRefFocus.putIfAbsent(c, FocusNode.new);
+
+  FocusNode _pageFocusOf(PagePart part) => switch (part) {
+    PagePart.title => _pageTitleFocus,
+    PagePart.scripture => _pageScriptureFocus,
+    PagePart.reference => _pageReferenceFocus,
+    PagePart.message => _pageMessageFocus,
+    _ => _pageRefFocusOf(
+      _refs.firstWhere((c) => c.text.trim().isEmpty, orElse: () => _refs.last),
+    ),
+  };
+
+  /// Moves to the previous or next part, in page order.
+  void _pageStep(int by) {
+    final i = PagePart.editable.indexOf(_pagePart!) + by;
+    if (i < 0 || i >= PagePart.editable.length) return _pageDone();
+    _editOnPage(PagePart.editable[i]);
+  }
+
+  void _pageDone() {
+    FocusScope.of(context).unfocus();
+    setState(() => _pagePart = null);
+  }
+
+  Widget _pagePane() => ColoredBox(
+    color: const Color(0xFFE2E0DC),
+    child: Column(
+      children: [
+        if (_pagePart == null) _pageHint() else _pageBar(),
+        Expanded(
+          child: ClipRect(
+            // Template lettering keeps its size whatever the phone's text size.
+            child: MediaQuery.withNoTextScaling(
+              child: PageEditorView(
+                layout: _layout,
+                photo: _photo,
+                crop: _juice.profileImageCrop,
+                part: _pagePart,
+                onTap: _onPageTap,
+                editors: _pageEditors,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _pageHint() => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+    child: Material(
+      color: Brand.charcoal,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Tap the part of the page you want to change.',
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _stopPageEditing,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Brand.charcoal,
+              ),
+              child: const Text('DONE EDITING'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  /// Name of the part, its limit, ‹ › and DONE, and any limit message.
+  Widget _pageBar() {
+    final part = _pagePart!;
+    final i = PagePart.editable.indexOf(part);
+    final (count, limit, unit, notice) = switch (part) {
+      PagePart.title => (
+        countWords(_title.text),
+        Limits.titleWords,
+        'words',
+        'title',
+      ),
+      PagePart.scripture => (
+        countWords(_scripture.text),
+        Limits.scriptureWords,
+        'words',
+        'scripture',
+      ),
+      PagePart.reference => (
+        _reference.text.length,
+        Limits.scriptureReferenceChars,
+        'characters',
+        'reference',
+      ),
+      PagePart.message => (
+        countWords(_message.text),
+        Limits.messageWords,
+        'words',
+        'message',
+      ),
+      _ => (
+        _refTexts.where((r) => r.trim().isNotEmpty).length,
+        Limits.furtherStudyRefs,
+        'references',
+        'refs',
+      ),
+    };
+    return Material(
+      color: Colors.white,
+      elevation: 3,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: SectionStyle.accent,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        part.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Brand.heading(15, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Previous part',
+                  onPressed: i > 0 ? () => _pageStep(-1) : null,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                IconButton(
+                  tooltip: 'Next part',
+                  onPressed: i < PagePart.editable.length - 1
+                      ? () => _pageStep(1)
+                      : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+                const SizedBox(width: 4),
+                FilledButton(onPressed: _pageDone, child: const Text('DONE')),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: LimitCounter(
+                count: count,
+                limit: limit,
+                unit: unit,
+                color: SectionStyle.accent,
+              ),
+            ),
+            FieldMessage(_notice[notice], isError: false),
+            if (part == PagePart.scripture || part == PagePart.message) ...[
+              const SizedBox(height: 10),
+              _PageSpaceMeter(layout: _layout),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The fields of the part being edited, placed where its text is printed.
+  List<Widget> _pageEditors(double scale) {
+    final part = _pagePart;
+    if (part == null) return const [];
+    final pad = PageInput.padding(scale);
+    switch (part) {
+      case PagePart.title:
+        return [
+          Positioned.fromRect(
+            rect: TemplateSpec.titleBox,
+            child: Center(
+              child: PageInput(
+                controller: _title,
+                focusNode: _pageTitleFocus,
+                style: TemplateSpec.titleStyle,
+                pitch: TemplateSpec.titleLinePitch,
+                // Wraps where the page moves a title to two lines.
+                width:
+                    TemplateSpec.titleSingleLineMax +
+                    TemplateSpec.titleStyle.letterSpacing! +
+                    4,
+                scale: scale,
+                capitals: true,
+                textCapitalization: TextCapitalization.characters,
+                textInputAction: TextInputAction.next,
+                onSubmitted: (_) => _pageStep(1),
+                inputFormatters: [_guard('title', _checkTitle)],
+                hintText: 'e.g. LET GO AND LET GOD',
+              ),
+            ),
+          ),
+        ];
+      case PagePart.scripture:
+        return [
+          Positioned(
+            left:
+                TemplateSpec.centerX -
+                TemplateSpec.scriptureMaxWidth / 2 -
+                2 -
+                pad,
+            top: PageInput.topFor(
+              TemplateSpec.scriptureStyle,
+              TemplateSpec.scriptureLinePitch,
+              TemplateSpec.scriptureFirstBaseline,
+              scale,
+            ),
+            child: PageInput(
+              controller: _scripture,
+              focusNode: _pageScriptureFocus,
+              style: TemplateSpec.scriptureStyle,
+              pitch: TemplateSpec.scriptureLinePitch,
+              width: TemplateSpec.scriptureMaxWidth + 4,
+              scale: scale,
+              multiline: true,
+              minLines: 2,
+              inputFormatters: [_guard('scripture', _checkScripture)],
+              hintText: '“So David went to Baal Perazim…”',
+            ),
+          ),
+        ];
+      case PagePart.reference:
+        const pitch = 112.0;
+        return [
+          Positioned(
+            left:
+                TemplateSpec.centerX -
+                TemplateSpec.scriptureMaxWidth / 2 -
+                2 -
+                pad,
+            top: PageInput.topFor(
+              TemplateSpec.referenceStyle,
+              pitch,
+              PageGeometry.referenceBaseline(_layout),
+              scale,
+            ),
+            child: PageInput(
+              controller: _reference,
+              focusNode: _pageReferenceFocus,
+              style: TemplateSpec.referenceStyle,
+              pitch: pitch,
+              width: TemplateSpec.scriptureMaxWidth + 4,
+              scale: scale,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _pageStep(1),
+              inputFormatters: [_guard('reference', _checkReference)],
+              hintText: 'e.g. 2 Samuel 5:20',
+            ),
+          ),
+        ];
+      case PagePart.message:
+        return [
+          Positioned(
+            left: TemplateSpec.bodyLeft - 1 - pad,
+            top: PageInput.topFor(
+              TemplateSpec.bodyStyle,
+              TemplateSpec.bodyLinePitch,
+              PageGeometry.messageBaseline(_layout),
+              scale,
+            ),
+            child: PageInput(
+              controller: _message,
+              focusNode: _pageMessageFocus,
+              style: TemplateSpec.bodyStyle,
+              pitch: TemplateSpec.bodyLinePitch,
+              width: TemplateSpec.bodyRight - TemplateSpec.bodyLeft + 2,
+              scale: scale,
+              textAlign: TextAlign.justify,
+              multiline: true,
+              minLines: 4,
+              inputFormatters: [_guard('message', _checkMessage)],
+              hintText: 'Write your Daily Juice…',
+            ),
+          ),
+        ];
+      default:
+        return [_pageFurtherStudy(scale)];
+    }
+  }
+
+  Widget _pageFurtherStudy(double scale) {
+    const style = TemplateSpec.furtherStudyStyle;
+    const pitch = 96.0;
+    final full = _refs.length >= Limits.furtherStudyRefs;
+    Widget round(Widget child, VoidCallback onTap, {double? width}) =>
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: width,
+            height: 22 / scale,
+            margin: EdgeInsets.symmetric(horizontal: 5 / scale),
+            padding: width == null
+                ? EdgeInsets.symmetric(horizontal: 9 / scale)
+                : EdgeInsets.zero,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: full && width == null
+                  ? const Color(0xFFA9A7A2)
+                  : Brand.charcoal,
+              borderRadius: BorderRadius.circular(11 / scale),
+            ),
+            child: child,
+          ),
+        );
+    return Positioned(
+      left: TemplateSpec.dividerLeft,
+      width: TemplateSpec.dividerRight - TemplateSpec.dividerLeft,
+      top: PageInput.topFor(
+        style,
+        pitch,
+        TemplateSpec.furtherStudyBaseline,
+        scale,
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < _refs.length; i++) ...[
+              if (i > 0) const Text(';', style: style),
+              PageInput(
+                controller: _refs[i],
+                focusNode: _pageRefFocusOf(_refs[i]),
+                style: style,
+                pitch: pitch,
+                width: math.max(
+                  PageInput.fieldWidth(
+                    style,
+                    _refs[i].text.isEmpty
+                        ? 'e.g. Isaiah 28:21'
+                        : _refs[i].text.toUpperCase(),
+                    scale,
+                  ),
+                  240,
+                ),
+                scale: scale,
+                capitals: true,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                onSubmitted: (v) {
+                  final last = i == _refs.length - 1;
+                  if (last && !full && v.trim().isNotEmpty) {
+                    _onAddReference(onPage: true);
+                  } else if (!last) {
+                    _pageRefFocusOf(_refs[i + 1]).requestFocus();
+                  } else {
+                    _pageDone();
+                  }
+                },
+                inputFormatters: [_guard('refs', (t) => _checkRef(i, t))],
+                hintText: i == 0
+                    ? 'e.g. 1 Chronicles 14:11'
+                    : 'e.g. Isaiah 28:21',
+              ),
+              Semantics(
+                button: true,
+                label: 'Remove reference ${i + 1}',
+                child: round(
+                  Icon(Icons.close, size: 14 / scale, color: Colors.white),
+                  () => _removeReference(i),
+                  width: 22 / scale,
+                ),
+              ),
+            ],
+            Semantics(
+              button: true,
+              label: 'Add reference',
+              child: round(
+                Text(
+                  '+ ADD',
+                  style: Brand.heading(12 / scale, color: Colors.white),
+                ),
+                () => _onAddReference(onPage: true),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ------------------------------------------------------------------ UI --
 
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final preview = _PreviewPane(
-      layout: _layout,
-      photo: _photo,
-      crop: _juice.profileImageCrop,
-      loading: !_photoLoaded,
-    );
+    final preview = _onPage
+        ? _pagePane()
+        : _PreviewPane(
+            layout: _layout,
+            photo: _photo,
+            crop: _juice.profileImageCrop,
+            loading: !_photoLoaded,
+            onEditHere: _startPageEditing,
+          );
     final onPreviewTab = !wide && _tabs.index == 1;
 
     return PopScope(
-      canPop: !onPreviewTab,
+      canPop: !onPreviewTab && !_onPage,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
+          // Back steps out of editing on the page first.
+          if (_pagePart != null) return _pageDone();
+          if (_onPage) return _stopPageEditing();
           _tabs.animateTo(0); // Back from the preview returns to writing.
           return;
         }
@@ -1214,12 +1702,16 @@ class _PreviewPane extends StatelessWidget {
     required this.photo,
     required this.crop,
     required this.loading,
+    required this.onEditHere,
   });
 
   final TemplateLayout layout;
   final ui.Image? photo;
   final PhotoCrop crop;
   final bool loading;
+
+  /// Starts editing on the page.
+  final VoidCallback onEditHere;
 
   @override
   Widget build(BuildContext context) => ColoredBox(
@@ -1232,6 +1724,21 @@ class _PreviewPane extends StatelessWidget {
           ),
         ),
         if (loading) const LinearProgressIndicator(minHeight: 2),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton.extended(
+            heroTag: null,
+            onPressed: onEditHere,
+            backgroundColor: Brand.charcoal,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.edit_outlined),
+            label: Text(
+              'EDIT HERE',
+              style: Brand.heading(18, color: Colors.white),
+            ),
+          ),
+        ),
       ],
     ),
   );

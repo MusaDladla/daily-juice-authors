@@ -108,7 +108,7 @@ class TemplateLayoutEngine {
 
   /// Bumped whenever layout behaviour changes, so images exported by an
   /// older version are regenerated instead of reused.
-  static const int revision = 5;
+  static const int revision = 6;
 
   static final RegExp _ws = RegExp(r'\s+');
   static final RegExp _letterOrDigit = RegExp(r'[\p{L}\p{N}]', unicode: true);

@@ -7,6 +7,7 @@ import 'package:daily_juice/template/photo_crop.dart';
 import 'package:daily_juice/ui/editor_screen.dart';
 import 'package:daily_juice/ui/theme.dart';
 import 'package:daily_juice/ui/widgets/focus_preview.dart';
+import 'package:daily_juice/ui/widgets/page_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -175,4 +176,108 @@ void main() {
       expect(find.text('Show live preview while typing'), findsOneWidget);
     },
   );
+
+  group('editing on the LIVE PREVIEW page', () {
+    Finder part(String label) => find.byWidgetPredicate(
+      (w) => w is Semantics && w.properties.label == label,
+    );
+    Finder pageFields() => find.descendant(
+      of: find.byType(PageEditorView),
+      matching: find.byType(TextField),
+    );
+
+    Future<void> startEditing(WidgetTester tester) async {
+      await _pumpEditor(tester);
+      await tester.tap(find.text('LIVE PREVIEW'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('EDIT HERE'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Tap the part of the page you want to change.'),
+        findsOneWidget,
+      );
+    }
+
+    testWidgets('the title is typed on the page; its limits still apply', (
+      tester,
+    ) async {
+      await startEditing(tester);
+      await tester.tap(part('Edit title'));
+      await tester.pumpAndSettle();
+      expect(pageFields(), findsOneWidget);
+
+      await tester.enterText(
+        pageFields(),
+        'JESUS CHRIST IS THE PATHWAY TO LIFE',
+      );
+      await tester.pump();
+      expect(find.text('7 / 7 words'), findsOneWidget);
+
+      await tester.enterText(
+        pageFields(),
+        'JESUS CHRIST IS THE PATHWAY TO NEW LIFE',
+      );
+      await tester.pump();
+      expect(find.text(Msg.titleWords), findsOneWidget);
+      expect(
+        _field(tester, pageFields()).controller!.text,
+        'JESUS CHRIST IS THE PATHWAY TO LIFE',
+      );
+
+      // Next part, then back to the whole page and the form.
+      await tester.tap(find.byTooltip('Next part'));
+      await tester.pumpAndSettle();
+      expect(find.text('THEME SCRIPTURE'), findsOneWidget);
+      await tester.tap(find.text('DONE'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DONE EDITING'));
+      await tester.pumpAndSettle();
+      expect(find.text('EDIT HERE'), findsOneWidget);
+
+      await tester.tap(find.text('WRITE'));
+      await tester.pumpAndSettle();
+      expect(
+        _field(
+          tester,
+          _fieldWithHint('e.g. LET GO AND LET GOD'),
+        ).controller!.text,
+        'JESUS CHRIST IS THE PATHWAY TO LIFE',
+      );
+    });
+
+    testWidgets('a 4th Further Study reference is refused on the page', (
+      tester,
+    ) async {
+      await startEditing(tester);
+      await tester.tap(part('Edit further study'));
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(part('Add reference'));
+        await tester.pumpAndSettle();
+      }
+      expect(pageFields(), findsNWidgets(3));
+      await tester.tap(part('Add reference'));
+      await tester.pumpAndSettle();
+      expect(find.text(Msg.furtherStudyMax), findsOneWidget);
+      expect(pageFields(), findsNWidgets(3));
+    });
+
+    testWidgets('the date opens the calendar', (tester) async {
+      await startEditing(tester);
+      await tester.tap(part('Edit date'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DatePickerDialog), findsOneWidget);
+    });
+
+    testWidgets('the photo and name stay with the profile', (tester) async {
+      await startEditing(tester);
+      await tester.tap(part('Photo: set in your profile'));
+      await tester.pump();
+      expect(
+        find.text('Your photo comes from your profile. Change it there.'),
+        findsOneWidget,
+      );
+      expect(pageFields(), findsNothing);
+    });
+  });
 }

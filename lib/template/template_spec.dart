@@ -55,20 +55,24 @@ class TemplateSpec {
 
   // ------------------------------------------------------------ title box --
   static const Rect titleBox = Rect.fromLTRB(517, 83, 2383, 500);
+
+  /// Letter spacing measured from the official "LET GO AND LET GOD"
+  /// artwork (Andiswa Mhlongo, Friday 2nd): ~11 px between letters and
+  /// ~37 px between words.
   static const TextStyle titleStyle = TextStyle(
     fontFamily: condensed,
     fontWeight: FontWeight.w700,
     fontSize: 138.6,
-    letterSpacing: 4.4,
+    letterSpacing: 0.7,
     color: ink,
   );
   static const double titleSidePadding = 70;
   static double get titleMaxWidth => titleBox.width - 2 * titleSidePadding;
 
-  /// Widest a title may be on one line: "THE LORD OUR MAKER" (1139 px) plus
+  /// Widest a title may be on one line: "THE LORD OUR MAKER" (1076 px) plus
   /// room for one more letter. A wider title moves to two balanced lines
   /// instead of stretching across the whole box.
-  static const double titleSingleLineMax = 1210;
+  static const double titleSingleLineMax = 1147;
 
   /// When a title needs two lines they are centred in the same box at the
   /// same size — never shrunk.
