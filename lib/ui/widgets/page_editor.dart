@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -273,6 +274,14 @@ class PageInput extends StatefulWidget {
 }
 
 class _PageInputState extends State<PageInput> {
+  /// Web app (Safari, Chrome): the browser's own Cut / Copy / Paste menu
+  /// doesn't work on the page fields, so they show the app's menu instead,
+  /// as in the Android app.
+  static bool get _appMenu => kIsWeb;
+
+  /// Page fields on screen; the browser's menu is back once there are none.
+  static int _open = 0;
+
   /// The field's own copy of the text when it shows capitals.
   _CapitalsController? _shown;
 
@@ -281,6 +290,7 @@ class _PageInputState extends State<PageInput> {
   @override
   void initState() {
     super.initState();
+    if (_appMenu && _open++ == 0) BrowserContextMenu.disableContextMenu();
     if (widget.capitals) {
       _shown = _CapitalsController()..value = widget.controller.value;
       _shown!.addListener(_toSource);
@@ -292,6 +302,7 @@ class _PageInputState extends State<PageInput> {
   void dispose() {
     widget.controller.removeListener(_fromSource);
     _shown?.dispose();
+    if (_appMenu && --_open == 0) BrowserContextMenu.enableContextMenu();
     super.dispose();
   }
 
