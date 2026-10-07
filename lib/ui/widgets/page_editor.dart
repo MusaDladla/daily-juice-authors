@@ -70,18 +70,30 @@ class PageGeometry {
         S.authorBar.right,
         S.authorBar.bottom,
       ),
-      PagePart.scripture: Rect.fromLTRB(
-        S.dividerLeft,
-        S.divider1Top + 17,
-        S.dividerRight,
-        math.max(refBase - 92, S.divider1Top + 131),
-      ),
-      PagePart.reference: Rect.fromLTRB(
-        S.dividerLeft,
-        refBase - 86,
-        S.dividerRight,
-        refBase + 26,
-      ),
+      // With no verse yet, the page has no room for it: the whole space
+      // between the rules is the Theme Scripture (the reference follows it
+      // with ›), so it can still be tapped.
+      if (layout.scriptureLines == 0)
+        PagePart.scripture: Rect.fromLTRB(
+          S.dividerLeft,
+          S.divider1Top + 17,
+          S.dividerRight,
+          layout.divider2Top - 4,
+        )
+      else ...{
+        PagePart.scripture: Rect.fromLTRB(
+          S.dividerLeft,
+          S.divider1Top + 17,
+          S.dividerRight,
+          math.max(refBase - 92, S.divider1Top + 131),
+        ),
+        PagePart.reference: Rect.fromLTRB(
+          S.dividerLeft,
+          refBase - 86,
+          S.dividerRight,
+          refBase + 26,
+        ),
+      },
       PagePart.message: Rect.fromLTRB(
         S.dividerLeft,
         layout.divider2Top + 36,

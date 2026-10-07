@@ -262,6 +262,28 @@ void main() {
       expect(pageFields(), findsNWidgets(3));
     });
 
+    testWidgets('an empty Theme Scripture can still be tapped and typed', (
+      tester,
+    ) async {
+      await startEditing(tester); // a new Daily Juice: no verse yet
+      expect(part('Edit theme scripture'), findsOneWidget);
+      await tester.tap(part('Edit theme scripture'));
+      await tester.pumpAndSettle();
+      expect(find.text('THEME SCRIPTURE'), findsOneWidget);
+
+      await tester.enterText(
+        pageFields(),
+        '“Be still, and know that I am God.”',
+      );
+      await tester.pump();
+      expect(find.text('8 / 38 words'), findsOneWidget);
+
+      // The reference follows the verse.
+      await tester.tap(find.byTooltip('Next part'));
+      await tester.pumpAndSettle();
+      expect(find.text('SCRIPTURE REFERENCE'), findsOneWidget);
+    });
+
     testWidgets('the date opens the calendar', (tester) async {
       await startEditing(tester);
       await tester.tap(part('Edit date'));

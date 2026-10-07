@@ -1725,18 +1725,20 @@ class _PreviewPane extends StatelessWidget {
         ),
         if (loading) const LinearProgressIndicator(minHeight: 2),
         Positioned(
-          right: 16,
-          bottom: 16,
-          child: FloatingActionButton.extended(
-            heroTag: null,
+          right: 12,
+          bottom: 12,
+          child: FilledButton.icon(
             onPressed: onEditHere,
-            backgroundColor: Brand.charcoal,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.edit_outlined),
-            label: Text(
-              'EDIT HERE',
-              style: Brand.heading(18, color: Colors.white),
+            style: FilledButton.styleFrom(
+              backgroundColor: Brand.charcoal,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, 38),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              elevation: 3,
+              textStyle: Brand.heading(15),
             ),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('EDIT HERE'),
           ),
         ),
       ],
