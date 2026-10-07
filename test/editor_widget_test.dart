@@ -284,6 +284,20 @@ void main() {
       expect(find.text('SCRIPTURE REFERENCE'), findsOneWidget);
     });
 
+    testWidgets('the Cut / Copy / Paste menu on the page is full size', (
+      tester,
+    ) async {
+      await startEditing(tester);
+      await tester.tap(part('Edit title'));
+      await tester.pumpAndSettle();
+      await tester.enterText(pageFields(), 'Let go and let God');
+      await tester.longPress(pageFields());
+      await tester.pumpAndSettle();
+      final button = find.byType(TextSelectionToolbarTextButton).first;
+      // As in the form: not shrunk with the zoomed-out page.
+      expect(tester.getRect(button).height, greaterThanOrEqualTo(40));
+    });
+
     testWidgets('the date opens the calendar', (tester) async {
       await startEditing(tester);
       await tester.tap(part('Edit date'));

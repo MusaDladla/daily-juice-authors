@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import '../../template/photo_crop.dart';
 import '../../template/template_layout.dart';
 import '../../template/template_painter.dart';
-import '../../template/text_measure.dart';
 import '../theme.dart';
 
 /// A part of the Daily Juice page that can be tapped in the LIVE PREVIEW.
@@ -154,10 +153,12 @@ class PageGeometry {
   }
 }
 
-/// A text field drawn on the page in the template's own lettering.
+/// A text field drawn over the page in the template's own lettering.
 ///
-/// Sized in template pixels: it sits inside the scaled page, so [scale] is
-/// only used to keep the cursor and outline visible on screen.
+/// [style], [pitch] and [width] are template pixels; the field is drawn at
+/// screen size ([scale] screen pixels per template pixel) on top of the
+/// zoomed page, not inside it, so its cursor, selection handles and the
+/// Cut / Copy / Paste menu stay normal size.
 class PageInput extends StatefulWidget {
   const PageInput({
     super.key,
@@ -201,21 +202,33 @@ class PageInput extends StatefulWidget {
   /// text is kept exactly as typed.
   final bool capitals;
 
-  /// Space between the text and the outline, in template pixels.
-  static double padding(double scale) => 4 / scale;
+  /// Space between the text and the outline, in screen pixels.
+  static const double padding = 4;
 
-  static TextStyle lineStyle(TextStyle style, double pitch) =>
-      style.copyWith(height: pitch / style.fontSize!);
+  /// The template [style] at screen size, one line every [pitch].
+  static TextStyle lineStyle(TextStyle style, double pitch, double scale) =>
+      style.copyWith(
+        fontSize: style.fontSize! * scale,
+        // Explicit, so the app's own text style adds no spacing.
+        letterSpacing: (style.letterSpacing ?? 0) * scale,
+        wordSpacing: 0,
+        height: pitch / style.fontSize!,
+      );
 
-  static StrutStyle strut(TextStyle style, double pitch) => StrutStyle(
-    fontFamily: style.fontFamily,
-    fontSize: style.fontSize,
-    fontWeight: style.fontWeight,
-    height: pitch / style.fontSize!,
-    forceStrutHeight: true,
-  );
+  static StrutStyle strut(TextStyle style, double pitch, double scale) =>
+      StrutStyle(
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize! * scale,
+        fontWeight: style.fontWeight,
+        height: pitch / style.fontSize!,
+        forceStrutHeight: true,
+      );
 
-  /// Top of a field whose first line has its baseline at [baseline].
+  /// Screen position of a field whose text starts at template [x].
+  static double leftFor(double x, double scale) => x * scale - padding;
+
+  /// Screen position of a field whose first line has its baseline at
+  /// template [baseline].
   static double topFor(
     TextStyle style,
     double pitch,
@@ -223,8 +236,8 @@ class PageInput extends StatefulWidget {
     double scale,
   ) {
     final painter = TextPainter(
-      text: TextSpan(text: 'Hg', style: lineStyle(style, pitch)),
-      strutStyle: strut(style, pitch),
+      text: TextSpan(text: 'Hg', style: lineStyle(style, pitch, scale)),
+      strutStyle: strut(style, pitch, scale),
       textDirection: TextDirection.ltr,
       textScaler: TextScaler.noScaling,
     )..layout();
@@ -232,12 +245,28 @@ class PageInput extends StatefulWidget {
       TextBaseline.alphabetic,
     );
     painter.dispose();
-    return baseline - offset - padding(scale);
+    return baseline * scale - offset - padding;
   }
 
-  /// Width of a field showing [text] on one line, cursor included.
-  static double fieldWidth(TextStyle style, String text, double scale) =>
-      TextMeasure.advance(style, text) + 2.5 / scale + 30;
+  /// Width (template pixels) of a field showing [text] on one line, cursor
+  /// included. Measured at screen size, where small text can come out a
+  /// little wider than the template measure.
+  static double fieldWidth(
+    TextStyle style,
+    double pitch,
+    String text,
+    double scale,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: lineStyle(style, pitch, scale)),
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.noScaling,
+      maxLines: 1,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return (width + 12) / scale;
+  }
 
   @override
   State<PageInput> createState() => _PageInputState();
@@ -281,22 +310,21 @@ class _PageInputState extends State<PageInput> {
   @override
   Widget build(BuildContext context) {
     final scale = widget.scale;
-    final pad = PageInput.padding(scale);
-    final line = PageInput.lineStyle(widget.style, widget.pitch);
+    final line = PageInput.lineStyle(widget.style, widget.pitch, scale);
     return Container(
-      padding: EdgeInsets.all(pad),
+      padding: const EdgeInsets.all(PageInput.padding),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.86),
-        border: Border.all(color: SectionStyle.accent, width: 2 / scale),
-        borderRadius: BorderRadius.circular(3 / scale),
+        border: Border.all(color: SectionStyle.accent, width: 2),
+        borderRadius: BorderRadius.circular(3),
       ),
       child: SizedBox(
-        width: widget.width,
+        width: widget.width * scale,
         child: TextField(
           controller: _controller,
           focusNode: widget.focusNode,
           style: line,
-          strutStyle: PageInput.strut(widget.style, widget.pitch),
+          strutStyle: PageInput.strut(widget.style, widget.pitch, scale),
           textAlign: widget.textAlign,
           maxLines: null,
           minLines: widget.minLines,
@@ -312,10 +340,21 @@ class _PageInputState extends State<PageInput> {
             ...?widget.inputFormatters,
           ],
           cursorColor: SectionStyle.accent,
-          cursorWidth: 2.5 / scale,
+          cursorWidth: 2.5,
           // Keep the caret clear of the screen edges while typing.
-          scrollPadding: EdgeInsets.symmetric(vertical: 60 / scale),
-          decoration: InputDecoration.collapsed(
+          scrollPadding: const EdgeInsets.symmetric(vertical: 60),
+          // Only the text: none of the app's field border, fill or padding,
+          // so it lines up with the page.
+          decoration: InputDecoration(
+            isCollapsed: true,
+            contentPadding: EdgeInsets.zero,
+            filled: false,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
             hintText: widget.hintText,
             // A long example must not make the field taller than its text.
             hintMaxLines: 1,
@@ -371,7 +410,8 @@ class PageEditorView extends StatefulWidget {
   final PagePart? part;
   final ValueChanged<PagePart> onTap;
 
-  /// The fields for [part], positioned in template pixels, at [scale].
+  /// The fields for [part], positioned in screen pixels over the page, which
+  /// is drawn at [scale] screen pixels per template pixel.
   final List<Widget> Function(double scale) editors;
 
   @override
@@ -468,7 +508,6 @@ class _PageEditorViewState extends State<PageEditorView> {
                   onTap: () => widget.onTap(p),
                 ),
               ),
-          if (part != null) ...widget.editors(scale),
         ],
       ),
     );
@@ -517,6 +556,17 @@ class _PageEditorViewState extends State<PageEditorView> {
                   scale: scale,
                   alignment: Alignment.topLeft,
                   child: _page(scale),
+                ),
+              ),
+              // The fields, at screen size over the page (see PageInput).
+              Positioned(
+                left: 6 - rect.left * scale,
+                top: 0,
+                width: S.width * scale,
+                height: S.height * scale,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: widget.editors(scale),
                 ),
               ),
             ],

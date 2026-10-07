@@ -852,12 +852,16 @@ class _EditorScreenState extends State<EditorScreen>
   List<Widget> _pageEditors(double scale) {
     final part = _pagePart;
     if (part == null) return const [];
-    final pad = PageInput.padding(scale);
     switch (part) {
       case PagePart.title:
         return [
           Positioned.fromRect(
-            rect: TemplateSpec.titleBox,
+            rect: Rect.fromLTRB(
+              TemplateSpec.titleBox.left * scale,
+              TemplateSpec.titleBox.top * scale,
+              TemplateSpec.titleBox.right * scale,
+              TemplateSpec.titleBox.bottom * scale,
+            ),
             child: Center(
               child: PageInput(
                 controller: _title,
@@ -883,11 +887,10 @@ class _EditorScreenState extends State<EditorScreen>
       case PagePart.scripture:
         return [
           Positioned(
-            left:
-                TemplateSpec.centerX -
-                TemplateSpec.scriptureMaxWidth / 2 -
-                2 -
-                pad,
+            left: PageInput.leftFor(
+              TemplateSpec.centerX - TemplateSpec.scriptureMaxWidth / 2 - 2,
+              scale,
+            ),
             top: PageInput.topFor(
               TemplateSpec.scriptureStyle,
               TemplateSpec.scriptureLinePitch,
@@ -912,11 +915,10 @@ class _EditorScreenState extends State<EditorScreen>
         const pitch = 112.0;
         return [
           Positioned(
-            left:
-                TemplateSpec.centerX -
-                TemplateSpec.scriptureMaxWidth / 2 -
-                2 -
-                pad,
+            left: PageInput.leftFor(
+              TemplateSpec.centerX - TemplateSpec.scriptureMaxWidth / 2 - 2,
+              scale,
+            ),
             top: PageInput.topFor(
               TemplateSpec.referenceStyle,
               pitch,
@@ -941,7 +943,7 @@ class _EditorScreenState extends State<EditorScreen>
       case PagePart.message:
         return [
           Positioned(
-            left: TemplateSpec.bodyLeft - 1 - pad,
+            left: PageInput.leftFor(TemplateSpec.bodyLeft - 1, scale),
             top: PageInput.topFor(
               TemplateSpec.bodyStyle,
               TemplateSpec.bodyLinePitch,
@@ -977,24 +979,24 @@ class _EditorScreenState extends State<EditorScreen>
           onTap: onTap,
           child: Container(
             width: width,
-            height: 22 / scale,
-            margin: EdgeInsets.symmetric(horizontal: 5 / scale),
+            height: 24,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
             padding: width == null
-                ? EdgeInsets.symmetric(horizontal: 9 / scale)
+                ? const EdgeInsets.symmetric(horizontal: 9)
                 : EdgeInsets.zero,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: full && width == null
                   ? const Color(0xFFA9A7A2)
                   : Brand.charcoal,
-              borderRadius: BorderRadius.circular(11 / scale),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: child,
           ),
         );
     return Positioned(
-      left: TemplateSpec.dividerLeft,
-      width: TemplateSpec.dividerRight - TemplateSpec.dividerLeft,
+      left: TemplateSpec.dividerLeft * scale,
+      width: (TemplateSpec.dividerRight - TemplateSpec.dividerLeft) * scale,
       top: PageInput.topFor(
         style,
         pitch,
@@ -1007,7 +1009,8 @@ class _EditorScreenState extends State<EditorScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             for (var i = 0; i < _refs.length; i++) ...[
-              if (i > 0) const Text(';', style: style),
+              if (i > 0)
+                Text(';', style: PageInput.lineStyle(style, pitch, scale)),
               PageInput(
                 controller: _refs[i],
                 focusNode: _pageRefFocusOf(_refs[i]),
@@ -1016,6 +1019,7 @@ class _EditorScreenState extends State<EditorScreen>
                 width: math.max(
                   PageInput.fieldWidth(
                     style,
+                    pitch,
                     _refs[i].text.isEmpty
                         ? 'e.g. Isaiah 28:21'
                         : _refs[i].text.toUpperCase(),
@@ -1046,9 +1050,9 @@ class _EditorScreenState extends State<EditorScreen>
                 button: true,
                 label: 'Remove reference ${i + 1}',
                 child: round(
-                  Icon(Icons.close, size: 14 / scale, color: Colors.white),
+                  const Icon(Icons.close, size: 15, color: Colors.white),
                   () => _removeReference(i),
-                  width: 22 / scale,
+                  width: 24,
                 ),
               ),
             ],
@@ -1056,10 +1060,7 @@ class _EditorScreenState extends State<EditorScreen>
               button: true,
               label: 'Add reference',
               child: round(
-                Text(
-                  '+ ADD',
-                  style: Brand.heading(12 / scale, color: Colors.white),
-                ),
+                Text('+ ADD', style: Brand.heading(13, color: Colors.white)),
                 () => _onAddReference(onPage: true),
               ),
             ),
