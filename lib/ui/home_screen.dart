@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
+import '../core/app_update.dart';
 import '../core/juice_date.dart';
 import '../core/juice_search.dart';
 import '../data/juice_repository.dart';
@@ -25,7 +27,10 @@ const _monthNames = [
 /// The author's dashboard: start a new Daily Juice, and find any Daily
 /// Juice (drafts to continue, or generated ones) by title or date.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.checkForUpdate = AppUpdate.checkOnAndroid});
+
+  /// Looks for a newer version of the app (Android only).
+  final Future<AppUpdate?> Function() checkForUpdate;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -36,10 +41,30 @@ class _HomeScreenState extends State<HomeScreen> {
   _Filter _filter = _Filter.all;
   DateTime? _dateFilter;
 
+  /// A newer version to offer, until the author taps LATER.
+  AppUpdate? _update;
+
   @override
   void initState() {
     super.initState();
     _search.addListener(() => setState(() {}));
+    widget.checkForUpdate().then((update) {
+      if (mounted && update != null) setState(() => _update = update);
+    });
+  }
+
+  Future<void> _downloadUpdate(AppUpdate update) async {
+    final opened = await launchUrl(
+      update.downloadUrl,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The download could not be opened. Try again later.'),
+        ),
+      );
+    }
   }
 
   @override
@@ -124,6 +149,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                 sliver: SliverList.list(
                   children: [
+                    if (_update case final update?) ...[
+                      _UpdateCard(
+                        update: update,
+                        onDownload: () => _downloadUpdate(update),
+                        onLater: () => setState(() => _update = null),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     Text(
                       '${juices.isEmpty ? 'Welcome' : 'Welcome back'}, '
                       '${profile.name.trim()}',
@@ -257,6 +290,75 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return out;
   }
+}
+
+/// "New version available", with what changed and how to install it.
+class _UpdateCard extends StatelessWidget {
+  const _UpdateCard({
+    required this.update,
+    required this.onDownload,
+    required this.onLater,
+  });
+
+  final AppUpdate update;
+  final VoidCallback onDownload;
+  final VoidCallback onLater;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+      side: const BorderSide(color: SectionStyle.accent, width: 1.5),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.system_update, color: SectionStyle.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'NEW VERSION AVAILABLE (${update.version})',
+                  style: Brand.heading(18, color: SectionStyle.accent),
+                ),
+              ),
+            ],
+          ),
+          if (update.notes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              update.notes,
+              maxLines: 6,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, height: 1.4),
+            ),
+          ],
+          const SizedBox(height: 8),
+          const Text(
+            'Tap DOWNLOAD, then open the downloaded file and tap Update. '
+            'Your Daily Juices and profile stay on your phone.',
+            style: TextStyle(color: Brand.muted, fontSize: 13, height: 1.35),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(onPressed: onLater, child: const Text('LATER')),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: onDownload,
+                icon: const Icon(Icons.download),
+                label: const Text('DOWNLOAD'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _Hero extends StatelessWidget {

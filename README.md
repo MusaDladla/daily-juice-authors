@@ -122,7 +122,7 @@ tool/         launcher icon generator
 ## Develop
 
 ```sh
-flutter test                         # 96 tests
+flutter test                         # 103 tests
 flutter run                          # debug on a connected phone
 flutter build apk --release          # build/app/outputs/flutter-apk/app-release.apk
 ```
@@ -133,9 +133,50 @@ Render the reference page to a PNG for visual comparison:
 DJ_RENDER_OUT=out.png flutter test test/template_reference_test.dart
 ```
 
-The release build is currently signed with the debug key, which is fine for
-installing on your own phones. Create an upload key before publishing to the
-Play Store.
+### Android updates
+
+Android authors install the APK from a file, so it never updates by itself.
+Instead, the app checks GitHub when the dashboard opens and, when a newer
+release exists, shows **New version available** with what changed and a
+**DOWNLOAD** button. The author opens the downloaded file and taps
+**Update**; drafts and the profile stay.
+
+To publish a new version:
+
+1. Raise `version:` in `pubspec.yaml` (e.g. `1.0.2+3` → `1.0.3+4`; both
+   numbers go up).
+2. Commit and push.
+3. Run:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File tool\release_android.ps1 -Notes "What changed."
+   ```
+
+   It builds the APK with the release key and publishes it as a GitHub
+   release (`v1.0.3`). The notes are what authors see in the message.
+
+### Signing key
+
+Android installs an update only if it is signed with the same key as the
+app already on the phone. The key is **not** in this repository: it lives
+in `%USERPROFILE%\DailyJuiceAuthors-signing\` (keystore, password and
+instructions), and `android/key.properties` (ignored by git) points to it.
+Without `key.properties` a release build stops instead of producing an APK
+phones would refuse.
+
+Keep copies of that folder in two safe places (e.g. Google Drive and a USB
+stick) and share it with no one. If it is lost, no update can ever be
+installed over the current app again: every author would have to uninstall
+(losing their drafts) and install a new app.
+
+On a new computer: copy the folder back to `%USERPROFILE%\`, then copy
+`key.properties` from it into `android\` (adjust `storeFile` if the path
+differs).
+
+The key is the original one the first APKs were signed with (certificate
+SHA-256 `02:6A:D8:C1:…:0A:96:5B`), so existing installs update normally.
+Google Play would likely not accept it; moving to Play would need one
+reinstall.
 
 ### iOS
 

@@ -129,7 +129,10 @@ void main() {
       await tester.pumpWidget(
         AppScope(
           state: state,
-          child: MaterialApp(theme: Brand.theme(), home: const HomeScreen()),
+          child: MaterialApp(
+            theme: Brand.theme(),
+            home: HomeScreen(checkForUpdate: () async => null),
+          ),
         ),
       );
       await tester.pump();
